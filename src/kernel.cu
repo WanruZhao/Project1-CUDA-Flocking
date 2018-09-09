@@ -422,12 +422,14 @@ __global__ void kernUpdateVelNeighborSearchScattered(
   if(index < N) {
 
     int particleIdx = particleArrayIndices[index];
-    glm::vec3 gridIdx3D = (pos[particleIdx] - gridMin) * inverseCellWidth;
+    glm::vec3 gridIdx3D = pos[particleIdx];
+	gridIdx3D -= gridMin;
+	gridIdx3D = gridIdx3D * inverseCellWidth;
 
     int neighborCells[8];
-    int neighborIdxX = glm::fract(gridIdx3D.x) > 0.5? 1 : -1;
-    int neighborIdxY = glm::fract(gridIdx3D.y) > 0.5? 1 : -1;
-    int neighborIdxZ = glm::fract(gridIdx3D.z) > 0.5? 1 : -1;
+	int neighborIdxX = (gridIdx3D.x - (int)gridIdx3D.x) > 0.5 ? 1 : -1;
+	int neighborIdxY = (gridIdx3D.y - (int)gridIdx3D.y) > 0.5 ? 1 : -1;
+	int neighborIdxZ = (gridIdx3D.z - (int)gridIdx3D.z) > 0.5 ? 1 : -1;
     
     glm::ivec3 offset[8] = {
       glm::ivec3(0, 0, 0),
@@ -442,10 +444,10 @@ __global__ void kernUpdateVelNeighborSearchScattered(
 
     for(int i = 0; i < 8; i++) {
       glm::ivec3 idx = glm::ivec3(gridIdx3D) + offset[i];
-      if(idx.x < 0 || idx.x > gridResolution || idx.y < 0 || idx.y > gridResolution || idx.z < 0 || idx.z > gridResolution) {
-        neighborCells[i] = gridIndex3Dto1D(idx.x, idx.y, idx.z, gridResolution);
+      if(idx.x < 0 || idx.x >= gridResolution || idx.y < 0 || idx.y >= gridResolution || idx.z < 0 || idx.z >= gridResolution) {
+		  neighborCells[i] = -1;
       } else {
-        neighborCells[i] = -1;
+		  neighborCells[i] = gridIndex3Dto1D(idx.x, idx.y, idx.z, gridResolution);
       }
     }
 
@@ -464,7 +466,7 @@ __global__ void kernUpdateVelNeighborSearchScattered(
       int startIdx = gridCellStartIndices[gridIdx];
       int endIdx = gridCellEndIndices[gridIdx];
 
-      for(int j = startIdx; j < endIdx; j++) {
+      for(int j = startIdx; j <= endIdx; j++) {
         int boid = particleArrayIndices[j];
         if(boid != particleIdx) {
           float distance = glm::distance(pos[boid], pos[particleIdx]);
@@ -494,8 +496,8 @@ __global__ void kernUpdateVelNeighborSearchScattered(
     }
 
     glm::vec3 new_vel = vel1[particleIdx] +  rule1Scale * (perceived_center - pos[particleIdx]) + rule2Scale * c + rule3Scale * perceived_velocity;
-    if(glm::length(new_velocity) > maxSpeed) {
-      new_vel *= maxSpeed / glm::length(new_velocity);
+    if(glm::length(new_vel) > maxSpeed) {
+      new_vel *= maxSpeed / glm::length(new_vel);
     }
     vel2[particleIdx] = new_vel;
   }
@@ -526,10 +528,11 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
     glm::vec3 gridIdx3D = (pos[index] - gridMin) * inverseCellWidth;
 
+	
     int neighborCells[8];
-    int neighborIdxX = glm::fract(gridIdx3D.x) > 0.5? 1 : -1;
-    int neighborIdxY = glm::fract(gridIdx3D.y) > 0.5? 1 : -1;
-    int neighborIdxZ = glm::fract(gridIdx3D.z) > 0.5? 1 : -1;
+    int neighborIdxX = (gridIdx3D.x - (int)gridIdx3D.x) > 0.5? 1 : -1;
+    int neighborIdxY = (gridIdx3D.y - (int)gridIdx3D.y) > 0.5? 1 : -1;
+    int neighborIdxZ = (gridIdx3D.z - (int)gridIdx3D.z) > 0.5? 1 : -1;
     
     glm::ivec3 offset[8] = {
       glm::ivec3(0, 0, 0),
@@ -544,12 +547,36 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
 
     for(int i = 0; i < 8; i++) {
       glm::ivec3 idx = glm::ivec3(gridIdx3D) + offset[i];
-      if(idx.x < 0 || idx.x > gridResolution || idx.y < 0 || idx.y > gridResolution || idx.z < 0 || idx.z > gridResolution) {
-        neighborCells[i] = gridIndex3Dto1D(idx.x, idx.y, idx.z, gridResolution);
+      if(idx.x < 0 || idx.x >= gridResolution || idx.y < 0 || idx.y >= gridResolution || idx.z < 0 || idx.z >= gridResolution) {
+		  neighborCells[i] = -1;
       } else {
-        neighborCells[i] = -1;
+		  neighborCells[i] = gridIndex3Dto1D(idx.x, idx.y, idx.z, gridResolution);
       }
     }
+	
+
+
+	/// nearest 27 cells
+	/*
+	int neighborCells[27];
+
+	for (int i = -1; i <= 1; i++) {
+		for (int j = -1; j <= 1; j++) {
+			for (int k = -1; k <= 1; k++) {
+				glm::ivec3 idx = glm::ivec3(gridIdx3D) + glm::ivec3(i, j, k);
+				int cellidx = i + 3 * j + 3 * 3 * k;
+				if (idx.x < 0 || idx.x >= gridResolution || idx.y < 0 || idx.y >= gridResolution || idx.z < 0 || idx.z >= gridResolution) {
+					neighborCells[cellidx] = -1;
+				}
+				else {
+					neighborCells[cellidx] = gridIndex3Dto1D(idx.x, idx.y, idx.z, gridResolution);
+				}
+			}
+		}
+	}
+	*/
+
+
 
     glm::vec3 perceived_center(0.0f);
     glm::vec3 c(0.0f);
@@ -566,7 +593,7 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
       int startIdx = gridCellStartIndices[gridIdx];
       int endIdx = gridCellEndIndices[gridIdx];
 
-      for(int j = startIdx; j < endIdx; j++) {
+      for(int j = startIdx; j <= endIdx; j++) {
         if(j != index) {
           float distance = glm::distance(pos[j], pos[index]);
           if(distance < rule1Distance) {
@@ -595,8 +622,8 @@ __global__ void kernUpdateVelNeighborSearchCoherent(
     }
 
     glm::vec3 new_vel = vel1[index] +  rule1Scale * (perceived_center - pos[index]) + rule2Scale * c + rule3Scale * perceived_velocity;
-    if(glm::length(new_velocity) > maxSpeed) {
-      new_vel *= maxSpeed / glm::length(new_velocity);
+    if(glm::length(new_vel) > maxSpeed) {
+      new_vel *= maxSpeed / glm::length(new_vel);
     }
     vel2[index] = new_vel;
   }
@@ -647,28 +674,30 @@ void Boids::stepSimulationScatteredGrid(float dt) {
   // - Update positions
   // - Ping-pong buffers as needed
 
-  dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
-  kernComputeIndices<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
-  checkCUDAErrorWithLine("ScatterGrid kernComputeIndices failed!");
+	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
+	kernComputeIndices<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+	checkCUDAErrorWithLine("ScatterGrid kernComputeIndices failed!");
 
-  thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
+	dev_thrust_particleArrayIndices = thrust::device_pointer_cast<int>(dev_particleArrayIndices);
+	dev_thrust_particleGridIndices = thrust::device_pointer_cast<int>(dev_particleGridIndices);
+	thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 
-  dim3 fullBlocksPerGridCell((gridCellCount + blockSize -1 ) / blockSize);
-  kernResetIntBuffer<<<fullBlocksPerGridCell, blockSize>>>(gridCellCount, dev_gridCellStartIndices, -1);
+	dim3 fullBlocksPerGridCell((gridCellCount + blockSize -1 ) / blockSize);
+	kernResetIntBuffer<<<fullBlocksPerGridCell, blockSize>>>(gridCellCount, dev_gridCellStartIndices, -1);
 	checkCUDAErrorWithLine("ScatterGrid kernResetIntBuffer failed!");
 	kernResetIntBuffer<<<fullBlocksPerGridCell, blockSize>>>(gridCellCount, dev_gridCellEndIndices, -1);
 	checkCUDAErrorWithLine("ScatterGrid kernResetIntBuffer failed!");
 
-  kernIdentifyCellStartEnd<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
-  checkCUDAErrorWithLine("ScatterGrid kernIdentifyStartEnd failed!");
+	kernIdentifyCellStartEnd<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+	checkCUDAErrorWithLine("ScatterGrid kernIdentifyStartEnd failed!");
 
-  kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
-  checkCUDAErrorWithLine("ScatterGrid kernUpdateVelNeighborSearchScattered failed!");
+	kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_pos, dev_vel1, dev_vel2);
+	checkCUDAErrorWithLine("ScatterGrid kernUpdateVelNeighborSearchScattered failed!");
 
-  kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos, dev_vel2);
-  checkCUDAErrorWithLine("ScatterGrid kernUpdatePos failed!");
+	kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_pos, dev_vel2);
+	checkCUDAErrorWithLine("ScatterGrid kernUpdatePos failed!");
 
-  std::swap(dev_vel1, dev_vel2);
+	std::swap(dev_vel1, dev_vel2);
 }
 
 void Boids::stepSimulationCoherentGrid(float dt) {
@@ -688,32 +717,32 @@ void Boids::stepSimulationCoherentGrid(float dt) {
   // - Update positions
   // - Ping-pong buffers as needed. THIS MAY BE DIFFERENT FROM BEFORE.
 
-  dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
-  kernComputeIndices<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
-  checkCUDAErrorWithLine("ScatterGrid kernComputeIndices failed!");
+	dim3 fullBlocksPerGrid((numObjects + blockSize - 1) / blockSize);
+	kernComputeIndices<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, dev_pos, dev_particleArrayIndices, dev_particleGridIndices);
+	checkCUDAErrorWithLine("ScatterGrid kernComputeIndices failed!");
 
-  thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
+	thrust::sort_by_key(dev_thrust_particleGridIndices, dev_thrust_particleGridIndices + numObjects, dev_thrust_particleArrayIndices);
 
-  dim3 fullBlocksPerGridCell((gridCellCount + blockSize -1 ) / blockSize);
-  kernResetIntBuffer<<<fullBlocksPerGridCell, blockSize>>>(gridCellCount, dev_gridCellStartIndices, -1);
+	dim3 fullBlocksPerGridCell((gridCellCount + blockSize -1 ) / blockSize);
+	kernResetIntBuffer<<<fullBlocksPerGridCell, blockSize>>>(gridCellCount, dev_gridCellStartIndices, -1);
 	checkCUDAErrorWithLine("ScatterGrid kernResetIntBuffer failed!");
 	kernResetIntBuffer<<<fullBlocksPerGridCell, blockSize>>>(gridCellCount, dev_gridCellEndIndices, -1);
 	checkCUDAErrorWithLine("ScatterGrid kernResetIntBuffer failed!");
 
-  kernIdentifyCellStartEnd<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
-  checkCUDAErrorWithLine("ScatterGrid kernIdentifyStartEnd failed!");
+	kernIdentifyCellStartEnd<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleGridIndices, dev_gridCellStartIndices, dev_gridCellEndIndices);
+	checkCUDAErrorWithLine("ScatterGrid kernIdentifyStartEnd failed!");
 
-  kernReshufflePosAndVel<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleArrayIndices, dev_pos, dev_vel1, dev_coherentPos, dev_coherentVel1);
-  checkCUDAErrorWithLine("ScatterGrid kernReshufflePosAndVel failed!");
+	kernReshufflePosAndVel<<<fullBlocksPerGrid, blockSize>>>(numObjects, dev_particleArrayIndices, dev_pos, dev_vel1, dev_coherentPos, dev_coherentVel1);
+	checkCUDAErrorWithLine("ScatterGrid kernReshufflePosAndVel failed!");
 
-  kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_coherentPos, dev_coherentVel1, dev_vel2);
-  checkCUDAErrorWithLine("ScatterGrid kernUpdateVelNeighborSearchScattered failed!");
+	kernUpdateVelNeighborSearchScattered<<<fullBlocksPerGrid, blockSize>>>(numObjects, gridSideCount, gridMinimum, gridInverseCellWidth, gridCellWidth, dev_gridCellStartIndices, dev_gridCellEndIndices, dev_particleArrayIndices, dev_coherentPos, dev_coherentVel1, dev_vel2);
+	checkCUDAErrorWithLine("ScatterGrid kernUpdateVelNeighborSearchScattered failed!");
 
-  kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_coherentPos, dev_vel2);
-  checkCUDAErrorWithLine("ScatterGrid kernUpdatePos failed!");
+	kernUpdatePos<<<fullBlocksPerGrid, blockSize>>>(numObjects, dt, dev_coherentPos, dev_vel2);
+	checkCUDAErrorWithLine("ScatterGrid kernUpdatePos failed!");
 
-  std::swap(dev_pos, dev_coherentPos);
-  std::swap(dev_vel1, dev_vel2);
+	std::swap(dev_pos, dev_coherentPos);
+	std::swap(dev_vel1, dev_vel2);
 }
 
 void Boids::endSimulation() {
